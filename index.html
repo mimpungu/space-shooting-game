@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jeu de Tir Spatial</title>
+<style>
+  /* Reset & base */
+  * {
+    box-sizing: border-box;
+  }
+  body, html {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: radial-gradient(ellipse at center, #000010 0%, #000000 80%);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #0ef;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  #gameContainer {
+    position: relative;
+    width: 480px;
+    height: 640px;
+    border: 3px solid #0ef;
+    border-radius: 12px;
+    background: linear-gradient(to bottom, #001022, #000000);
+    box-shadow: 0 0 15px #0ef;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    background: transparent;
+    position: absolute;
+    top: 0; left: 0;
+    width: 480px;
+    height: 640px;
+  }
+  #hud {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    z-index: 20;
+    color: #0ef;
+    font-weight: 600;
+    text-shadow: 0 0 8px #0ef;
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+    font-size: 18px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  #scoreBoard,
+  #levelBoard,
+  #playerNameBoard {
+    padding: 0 6px;
+  }
+  #muteToggle {
+    cursor: pointer;
+    background: #0ef;
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 14px;
+    padding: 4px 10px;
+    align-self: center;
+    user-select: none;
+    transition: background 0.3s ease;
+  }
+  #muteToggle:hover {
+    background: #0cc;
+  }
+
+  #gameOverScreen, #victoryScreen, #startScreen {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.95);
+    color: #0ef;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    border-radius: 12px;
+    text-align: center;
+    z-index: 30;
+  }
+  #gameOverScreen.hidden, #victoryScreen.hidden, #startScreen.hidden {
+    display: none;
+  }
+  #gameOverScreen button, #victoryScreen button, #startScreen button {
+    margin-top: 25px;
+    background: #0ef;
+    border: none;
+    color: #000;
+    padding: 10px 22px;
+    border-radius: 8px;
+    font-weight: 900;
+    font-size: 20px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    user-select: none;
+  }
+  #gameOverScreen button:hover, #victoryScreen button:hover, #startScreen button:hover {
+    background: #0cc;
+  }
+  #startScreen input[type="text"], #startScreen select {
+    font-size: 18px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 2px solid #0ef;
+    background: transparent;
+    color: #0ef;
+    width: 70%;
+    max-width: 320px;
+    text-align: center;
+    margin-top: 12px;
+    user-select: text;
+    appearance: none;
+  }
+  #startScreen label {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    margin-top: 10px;
+    user-select: none;
+  }
+  #difficultyLabel {
+    margin-top: 20px;
+  }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="starfieldCanvas" width="480" height="640" style="z-index:0;"></canvas>
+  <canvas id="gameCanvas" width="480" height="640" style="z-index:10;"></canvas>
+  <div id="hud" aria-live="polite" aria-atomic="true">
+    <div id="playerNameBoard">Joueur: --</div>
+    <div id="scoreBoard">Score: 0</div>
+    <div id="levelBoard">Niveau: 1</div>
+    <button id="muteToggle" aria-pressed="false" aria-label="Basculer son">Son ON</button>
+  </div>
+  <div id="startScreen" role="dialog" aria-modal="true" aria-labelledby="startTitle" aria-describedby="startDesc">
+    <div id="startTitle">Bienvenue au Jeu de Tir Spatial</div>
+    <label for="playerNameInput">Entrez votre prénom :</label>
+    <input id="playerNameInput" type="text" maxlength="15" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" placeholder="Prénom" aria-required="true" />
+    <label id="difficultyLabel" for="difficultySelect">Choisissez la difficulté :</label>
+    <select id="difficultySelect" aria-labelledby="difficultyLabel">
+      <option value="facile">Facile</option>
+      <option value="intermediaire" selected>Intermédiaire</option>
+      <option value="difficile">Difficile</option>
+    </select>
+    <button id="startBtn" disabled>Jouer</button>
+    <p style="margin-top:16px; font-size:14px; color:#0ef; user-select:none;">Déplacements: Flèches ou A/D | Tir: Espace | Pause: P</p>
+  </div>
+  <div id="gameOverScreen" class="hidden" role="alertdialog" aria-modal="true" aria-labelledby="gameOverTitle">
+    <div id="gameOverTitle">FIN DE PARTIE</div>
+    <div id="finalScoreText" style="margin-top:12px; font-size:20px;"></div>
+    <button id="restartBtn">Recommencer</button>
+  </div>
+  <div id="victoryScreen" class="hidden" role="alertdialog" aria-modal="true" aria-labelledby="victoryTitle">
+    <div id="victoryTitle">VICTOIRE !</div>
+    <div id="victoryScoreText" style="margin-top:12px; font-size:20px;"></div>
+    <button id="victoryRestartBtn">Rejouer</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const width = 480;
+  const height = 640;
+
+  const starfieldCanvas = document.getElementById('starfieldCanvas');
+  const starCtx = starfieldCanvas.getContext('2d');
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+
+  // Player settings
+  const playerWidth = 40;
+  const playerHeight = 20;
+  const playerSpeed = 6;
+  let playerX = (width - playerWidth) / 2;
+  const playerY = height - playerHeight - 10;
+
+  // Bullets
+  const bulletWidth = 4;
+  const bulletHeight = 10;
+  const bulletSpeed = 10;
+  let bullets = [];
+
+  // Enemies
+  const enemyWidth = 40;
+  const enemyHeight = 20;
+  let enemySpeedBase = 2;
+  let enemyDescendYBase = 18;
+  let enemySpeed = enemySpeedBase;
+  let enemyDescendY = enemyDescendYBase;
+  let enemies = [];
+  const enemyRowCountInit = 4;
+  let enemyRowCount = enemyRowCountInit;
+  const enemyColumnCount = 8;
+  let enemyDirection = 1; // 1 right, -1 left
+
+  // Game variables
+  let score = 0;
+  let isGameOver = false;
+  let isPaused = false;
+  let canShoot = true;
+  let playerLives = 3;
+  let level = 1;
+  const maxLevel = 10;
+  let playerName = '';
+
+  // Sounds toggle
+  let soundOn = true;
+
+  // HTML elements
+  const scoreBoard = document.getElementById('scoreBoard');
+  const levelBoard = document.getElementById('levelBoard');
+  const playerNameBoard = document.getElementById('playerNameBoard');
+  const gameOverScreen = document.getElementById('gameOverScreen');
+  const finalScoreText = document.getElementById('finalScoreText');
+  const restartBtn = document.getElementById('restartBtn');
+  const victoryScreen = document.getElementById('victoryScreen');
+  const victoryScoreText = document.getElementById('victoryScoreText');
+  const victoryRestartBtn = document.getElementById('victoryRestartBtn');
+  const startScreen = document.getElementById('startScreen');
+  const startBtn = document.getElementById('startBtn');
+  const playerNameInput = document.getElementById('playerNameInput');
+  const difficultySelect = document.getElementById('difficultySelect');
+  const muteToggle = document.getElementById('muteToggle');
+
+  // Key tracking
+  let leftPressed = false;
+  let rightPressed = false;
+  let spacePressed = false;
+
+  // Audio context for beeps
+  const audioCtx = new(window.AudioContext || window.webkitAudioContext)();
+
+  function playBeep(frequency, duration = 150) {
+    if (!soundOn) return;
+    try {
+      let oscillator = audioCtx.createOscillator();
+      let gainNode = audioCtx.createGain();
+      oscillator.type = 'square';
+      oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.start();
+      gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      oscillator.stop(audioCtx.currentTime + duration / 1000);
+    } catch (e) {
+      // no audio context or issues - ignore
+    }
+  }
+
+  // Starfield on canvas, fewer stars for performance
+  const starCount = 60;
+  let stars = [];
+
+  function createStars() {
+    stars = [];
+    for (let i = 0; i < starCount; i++) {
+      stars.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        size: Math.random() * 2 + 1,
+        speed: Math.random() * 0.15 + 0.05,
+        twinklePhase: Math.random() * Math.PI * 2
+      });
+    }
+  }
+
+  function updateAndDrawStars(deltaTime) {
+    starCtx.clearRect(0, 0, width, height);
+    stars.forEach(star => {
+      star.y += star.speed * deltaTime;
+      if (star.y > height) star.y = 0;
+      star.twinklePhase += 0.05 * deltaTime;
+      const alpha = 0.4 + 0.6 * (Math.sin(star.twinklePhase) * 0.5 + 0.5);
+      starCtx.fillStyle = `rgba(0, 238, 255, ${alpha.toFixed(2)})`;
+      starCtx.beginPath();
+      starCtx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+      starCtx.fill();
+    });
+  }
+
+  // Create enemies formation
+  function createEnemies() {
+    enemies = [];
+    const hSpacing = (width - enemyColumnCount * enemyWidth) / (enemyColumnCount + 1);
+    const vSpacing = 30;
+    for (let r = 0; r < enemyRowCount; r++) {
+      for (let c = 0; c < enemyColumnCount; c++) {
+        const x = hSpacing + c * (enemyWidth + hSpacing);
+        const y = vSpacing + r * (enemyHeight + vSpacing / 2);
+        enemies.push({ x, y, hit: false });
+      }
+    }
+  }
+
+  // Draw player ship with subtle glow (without costly shadows)
+  function drawPlayer() {
+    ctx.fillStyle = '#0ef';
+    ctx.beginPath();
+    ctx.moveTo(playerX + playerWidth / 2, playerY);
+    ctx.lineTo(playerX, playerY + playerHeight);
+    ctx.lineTo(playerX + playerWidth, playerY + playerHeight);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Draw bullets
+  function drawBullets() {
+    ctx.fillStyle = '#0ff';
+    bullets.forEach(b => {
+      ctx.fillRect(b.x, b.y, bulletWidth, bulletHeight);
+    });
+  }
+
+  // Draw enemies with simple coloring (no shadow)
+  function drawEnemies() {
+    ctx.fillStyle = '#f00';
+    enemies.forEach(e => {
+      if (!e.hit) {
+        ctx.fillRect(e.x, e.y, enemyWidth, enemyHeight);
+        // Eyes
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(e.x + 10, e.y + 5, 6, 6);
+        ctx.fillRect(e.x + 24, e.y + 5, 6, 6);
+        ctx.fillStyle = '#f00';
+      }
+    });
+  }
+
+  // Draw remaining lives as small triangles near hud left
+  function drawLives() {
+    const lifeWidth = 15;
+    const lifeHeight = 8;
+    const startX = 5;
+    const startY = 26;
+    // Clear area for lives
+    ctx.clearRect(0, 15, 100, 30);
+    for (let i = 0; i < playerLives; i++) {
+      const x = startX + i * (lifeWidth + 8);
+      const y = startY;
+      // Draw small triangle ship
+      ctx.fillStyle = '#0ef';
+      ctx.beginPath();
+      ctx.moveTo(x + lifeWidth / 2, y);
+      ctx.lineTo(x, y + lifeHeight);
+      ctx.lineTo(x + lifeWidth, y + lifeHeight);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // Update player position from keyboard input
+  function movePlayer() {
+    if (leftPressed) {
+      playerX = Math.max(0, playerX - playerSpeed);
+    }
+    if (rightPressed) {
+      playerX = Math.min(width - playerWidth, playerX + playerSpeed);
+    }
+  }
+
+  // Update bullet positions and remove offscreen ones
+  function moveBullets() {
+    bullets = bullets.filter(b => b.y + bulletHeight > 0);
+    bullets.forEach(b => {
+      b.y -= bulletSpeed;
+    });
+  }
+
+  // Move enemies left/right and down on bounds
+  function moveEnemies() {
+    let hitEdge = false;
+    enemies.forEach(e => {
+      if (!e.hit) {
+        e.x += enemySpeed * enemyDirection;
+        if (e.x <= 0 || e.x + enemyWidth >= width) {
+          hitEdge = true;
+        }
+      }
+    });
+    if (hitEdge) {
+      enemyDirection *= -1;
+      enemies.forEach(e => {
+        if (!e.hit) {
+          e.y += enemyDescendY;
+        }
+      });
+    }
+  }
+
+  // Detect collisions between bullets and enemies
+  function checkCollisions() {
+    bullets.forEach((b, bulletIndex) => {
+      enemies.forEach(e => {
+        if (!e.hit &&
+          b.x < e.x + enemyWidth &&
+          b.x + bulletWidth > e.x &&
+          b.y < e.y + enemyHeight &&
+          b.y + bulletHeight > e.y) {
+          e.hit = true;
+          bullets.splice(bulletIndex, 1);
+          score += 10;
+          playBeep(600, 100);
+        }
+      });
+    });
+
+    // Check if any enemy touched player line or below - lose a life
+    enemies.forEach(e => {
+      if (!e.hit && (e.y + enemyHeight) >= playerY) {
+        playerLives--;
+        playBeep(220, 300);
+        if (playerLives <= 0) {
+          isGameOver = true;
+        } else {
+          resetPositionsAfterHit();
+        }
+      }
+    });
+
+    // If all enemies eliminated, next level
+    if (enemies.every(e => e.hit)) {
+      if (level >= maxLevel) {
+        gameWon();
+      } else {
+        level++;
+        enemySpeed = enemySpeedBase + level * 0.4;
+        enemyRowCount = enemyRowCountInit + Math.floor(level / 3);
+        createEnemies();
+      }
+    }
+  }
+
+  // Reset positions after player loses a life, clear bullets
+  function resetPositionsAfterHit() {
+    playerX = (width - playerWidth) / 2;
+    bullets = [];
+    createEnemies();
+  }
+
+  // Shoot bullet if allowed
+  function shoot() {
+    if (canShoot && !isGameOver && !isPaused) {
+      bullets.push({ x: playerX + playerWidth / 2 - bulletWidth / 2, y: playerY });
+      playBeep(880, 80);
+      canShoot = false;
+      setTimeout(() => {
+        canShoot = true;
+      }, 280);
+    }
+  }
+
+  // Draw all game elements (except starfield)
+  function draw() {
+    ctx.clearRect(0, 0, width, height);
+    drawPlayer();
+    drawBullets();
+    drawEnemies();
+    drawLives();
+  }
+
+  // HUD update
+  function updateHUD() {
+    scoreBoard.textContent = `Score: ${score}`;
+    levelBoard.textContent = `Niveau: ${level}`;
+    playerNameBoard.textContent = `Joueur: ${playerName || '--'}`;
+    muteToggle.textContent = soundOn ? 'Son ON' : 'Son OFF';
+    muteToggle.setAttribute('aria-pressed', (!soundOn).toString());
+  }
+
+  // Game loop variables for star animation timing
+  let lastTime = 0;
+
+  // Main update loop
+  function update(timestamp = 0) {
+    if (!lastTime) lastTime = timestamp;
+    const delta = timestamp - lastTime;
+    lastTime = timestamp;
+
+    if (isGameOver) {
+      gameOverScreen.classList.remove('hidden');
+      finalScoreText.textContent = `${playerName}, votre score final est ${score}.`;
+      return;
+    }
+    if (isPaused) {
+      requestAnimationFrame(update);
+      return;
+    }
+    updateAndDrawStars(delta);
+    movePlayer();
+    moveBullets();
+    moveEnemies();
+    checkCollisions();
+    updateHUD();
+    draw();
+
+    requestAnimationFrame(update);
+  }
+
+  // Handle victory screen
+  function gameWon() {
+    victoryScreen.classList.remove('hidden');
+    victoryScoreText.textContent = `${playerName}, vous avez terminé tous les niveaux avec un score de ${score} ! Bravo !`;
+    isPaused = true;
+  }
+
+  // Keyboard events
+  window.addEventListener('keydown', e => {
+    if (e.repeat) return;
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+      leftPressed = true;
+    }
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+      rightPressed = true;
+    }
+    if (e.code === 'Space') {
+      spacePressed = true;
+      shoot();
+    }
+    if (e.code === 'KeyP') {
+      if (!isGameOver && gameRunning) {
+        isPaused = !isPaused;
+        if (!isPaused) {
+          update();
+        }
+      }
+    }
+  });
+  window.addEventListener('keyup', e => {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+      leftPressed = false;
+    }
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+      rightPressed = false;
+    }
+    if (e.code === 'Space') {
+      spacePressed = false;
+    }
+  });
+
+  // Restart game functions
+  function restartGame() {
+    isGameOver = false;
+    isPaused = false;
+    score = 0;
+    level = 1;
+    playerLives = 3;
+    playerX = (width - playerWidth) / 2;
+    bullets = [];
+
+    // Reset difficulty-based speeds
+    setDifficultySpeeds(selectedDifficulty);
+
+    enemyRowCount = enemyRowCountInit;
+    createEnemies();
+    updateHUD();
+    gameOverScreen.classList.add('hidden');
+    victoryScreen.classList.add('hidden');
+    update();
+  }
+
+  restartBtn.addEventListener('click', restartGame);
+  victoryRestartBtn.addEventListener('click', restartGame);
+
+  // Start screen events
+  playerNameInput.focus();
+
+  let selectedDifficulty = 'intermediaire';
+
+  playerNameInput.addEventListener('input', updateStartButtonState);
+  difficultySelect.addEventListener('change', () => {
+    selectedDifficulty = difficultySelect.value;
+  });
+
+  function updateStartButtonState() {
+    const trimmed = playerNameInput.value.trim();
+    startBtn.disabled = trimmed.length === 0;
+  }
+  updateStartButtonState();
+
+  startBtn.addEventListener('click', () => {
+    const nameVal = playerNameInput.value.trim();
+    if (nameVal.length === 0) return;
+    playerName = nameVal;
+
+    // Set speeds based on difficulty
+    setDifficultySpeeds(selectedDifficulty);
+
+    startScreen.classList.add('hidden');
+    updateHUD();
+    createEnemies();
+    gameRunning = true;
+    update();
+  });
+
+  function setDifficultySpeeds(difficulty) {
+    switch (difficulty) {
+      case 'facile':
+        enemySpeedBase = 1.2;
+        enemyDescendYBase = 8;
+        break;
+      case 'intermediaire':
+        enemySpeedBase = 2;
+        enemyDescendYBase = 18;
+        break;
+      case 'difficile':
+        enemySpeedBase = 3.2;
+        enemyDescendYBase = 28;
+        break;
+      default:
+        enemySpeedBase = 2;
+        enemyDescendYBase = 18;
+    }
+    enemySpeed = enemySpeedBase;
+    enemyDescendY = enemyDescendYBase;
+  }
+
+  // Mute toggle
+  muteToggle.addEventListener('click', () => {
+    soundOn = !soundOn;
+    muteToggle.textContent = soundOn ? 'Son ON' : 'Son OFF';
+    muteToggle.setAttribute('aria-pressed', (!soundOn).toString());
+  });
+
+  // Initial setup
+  createStars();
+
+  let gameRunning = false;
+})();
+</script>
+</body>
+</html>
+
